@@ -115,6 +115,134 @@ func NewDot11ProbeRequest(staMac net.HardwareAddr, seq uint16, ssid string, chan
 	return Serialize(stack...)
 }
 
+func NewDot11ProbeResponse(client net.HardwareAddr, ap net.HardwareAddr, seq uint16, ssid string, channel int) (error, []byte) {
+	stack := []gopacket.SerializableLayer{
+		&layers.RadioTap{},
+		&layers.Dot11{
+			Address1:       client,
+			Address2:       ap,
+			Address3:       ap,
+			Type:           layers.Dot11TypeMgmtProbeResp,
+			SequenceNumber: seq,
+			Flags: 			layers.Dot11Flags(uint8(0x08)),
+		},
+		&layers.Dot11MgmtBeacon{
+			Flags:    uint16(0x411),
+			Interval: 100,
+		},
+		&layers.Dot11InformationElement{
+			ID:     layers.Dot11InformationElementIDSSID,
+			Length: uint8(len(ssid) & 0xff),
+			Info:   []byte(ssid),
+		},
+		Dot11Info(layers.Dot11InformationElementIDRates, []byte{0x82, 0x84, 0x8b, 0x96}),
+		Dot11Info(layers.Dot11InformationElementIDESRates, []byte{0x0c, 0x12, 0x18, 0x24, 0x30, 0x48, 0x60, 0x6c}),
+		Dot11Info(layers.Dot11InformationElementIDERPInfo, []byte{0x04}),
+		Dot11Info(layers.Dot11InformationElementIDDSSet, []byte{byte(channel & 0xff)}),
+		Dot11Info(layers.Dot11InformationElementIDRSNInfo, []byte{0x01, 0x00,0x00, 0x0f, 0xac, 0x02, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x02, 0x00, 0x00}),
+		Dot11Info(layers.Dot11InformationElementIDVendor, []byte{0x00, 0x50, 0xf2, 0x01, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02}),
+		Dot11Info(layers.Dot11InformationElementIDHTCapabilities, []byte{0x2d, 0x40, 0x1b, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
+		Dot11Info(layers.Dot11InformationElementIDExtCapability, []byte{0x00, 0x00, 0x08, 0x04, 0x00, 0x00, 0x00, 0x40}),
+	}
+
+	return Serialize(stack...)
+}
+
+func NewDot11AssociationResponse(client net.HardwareAddr, ap net.HardwareAddr, seq uint16) (error, []byte) {
+	stack := []gopacket.SerializableLayer{
+		&layers.RadioTap{},
+		&layers.Dot11{
+			Address1:       client,
+			Address2:       ap,
+			Address3:       ap,
+			Type:           layers.Dot11TypeMgmtAssociationResp,
+			SequenceNumber: seq,
+			Flags: 			layers.Dot11Flags(uint8(0x08)),
+		},
+		Dot11Info(0x11, []byte{0x00, 0x00, 0x01, 0xc0}),
+		Dot11Info(layers.Dot11InformationElementIDRates, []byte{0x82, 0x84, 0x8b, 0x96}),
+		Dot11Info(layers.Dot11InformationElementIDESRates, []byte{0x0c, 0x12, 0x18, 0x24, 0x30, 0x48, 0x60, 0x6c}),
+		Dot11Info(layers.Dot11InformationElementIDExtCapability, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40}),
+	}
+
+	return Serialize(stack...)
+}
+
+func NewDot11M1Wpa2(client net.HardwareAddr, ap net.HardwareAddr, seq uint16, replay uint64) (error, []byte) {
+	stack := []gopacket.SerializableLayer{
+		&layers.RadioTap{},
+		&layers.Dot11{
+			Address1:       client,
+			Address2:       ap,
+			Address3:       ap,
+			Type:           layers.Dot11TypeData,
+			SequenceNumber: seq,
+			Flags: 			layers.Dot11Flags(uint8(0x08)),
+		},
+		&layers.LLC{
+			DSAP:       	uint8(0xaa),
+			IG:       		false,
+			SSAP:      	 	uint8(0xaa),
+			CR:				false,
+			Control:		uint16(0x03),
+		},
+		&layers.SNAP{
+			OrganizationalCode: []byte{0x00, 0x00, 0x00},
+			Type:       		layers.EthernetType(uint16(0x888e)),
+		},
+		&layers.EAPOL{
+			Version:       	uint8(0x02),
+			Type:       	layers.EAPOLType(uint8(0x03)),
+			Length:      	uint16(0x005f),
+		},
+		&layers.EAPOLKey{
+			KeyDescriptorType:    layers.EAPOLKeyDescriptorType(uint8(0x02)),
+			KeyDescriptorVersion: layers.EAPOLKeyDescriptorVersion(uint16(0x008a)),
+			KeyType:              layers.EAPOLKeyType(uint8(0x01)),
+			KeyIndex:             uint8(0x00),
+			Install:              false,
+			KeyACK:               true,
+			KeyMIC:               false,
+			Secure:               false,
+			MICError:             false,
+			Request:              false,
+			HasEncryptedKeyData:  false,
+			SMKMessage:           false,
+			KeyLength:            uint16(0x008a),
+			ReplayCounter:        replay,
+			Nonce:                []byte{0x82, 0x84, 0x8b, 0x96, 0x82, 0x84, 0x8b, 0x96, 0x82, 0x84, 0x8b, 0x96, 0x82, 0x84, 0x8b, 0x96, 0x82, 0x84, 0x8b, 0x96, 0x82, 0x84, 0x8b, 0x96, 0x82, 0x84, 0x8b, 0x96, 0x82, 0x84, 0x8b, 0x96},
+			IV:                   []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			RSC:                  uint64(0x00),
+			ID:                   uint64(0x00),
+			MIC:                  []byte{0x00},
+			KeyDataLength:        uint16(0x00),
+			EncryptedKeyData:     []byte{},
+		},
+	}
+
+	return Serialize(stack...)
+}
+
+func NewDot11AuthenticationResponse(client net.HardwareAddr, ap net.HardwareAddr, seq uint16) (error, []byte) {
+	stack := []gopacket.SerializableLayer{
+		&layers.RadioTap{},
+		&layers.Dot11{
+			Address1:       client,
+			Address2:       ap,
+			Address3:       ap,
+			Type:           layers.Dot11TypeMgmtAuthentication,
+			SequenceNumber: seq,
+		},
+		&layers.Dot11MgmtAuthentication{
+			Algorithm: layers.Dot11AlgorithmOpen,
+			Sequence:  2,
+			Status:    layers.Dot11StatusSuccess,
+		},
+	}
+
+	return Serialize(stack...)
+}
+
 func NewDot11Deauth(a1 net.HardwareAddr, a2 net.HardwareAddr, a3 net.HardwareAddr, seq uint16) (error, []byte) {
 	return Serialize(
 		&layers.RadioTap{},

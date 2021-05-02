@@ -221,3 +221,66 @@ func (mod *WiFiModule) discoverDeauths(radiotap *layers.RadioTap, dot11 *layers.
 		Reason:   reason,
 	})
 }
+
+
+func (mod *WiFiModule) assocClients(radiotap *layers.RadioTap, dot11 *layers.Dot11, packet gopacket.Packet) {
+	// skip stuff we're sending
+	if bytes.Equal(mod.probeMac, dot11.Address2) {
+		return
+	}
+
+	if dot11.Type == layers.Dot11TypeMgmtProbeReq {
+
+		reqLayer := packet.Layer(layers.LayerTypeDot11MgmtProbeReq)
+		if reqLayer == nil {
+			return
+		}
+
+		req, ok := reqLayer.(*layers.Dot11MgmtProbeReq)
+		if !ok {
+			return
+		}
+
+		tot := len(req.Contents)
+		if tot < 3 {
+			return
+		}
+
+		avail := uint32(tot - 2)
+		if avail < 2 {
+			return
+		}
+
+		size := uint32(req.Contents[1])
+		if size == 0 || size > avail {
+			return
+		}
+
+		apSSID := string(req.Contents[2 : 2+size])
+		if mod.filterProbeAP != nil && !mod.filterProbeAP.MatchString(apSSID) {
+			return
+		}
+
+		mod.Info("Sending probe response %s -> %s", dot11.Address2, apSSID)
+		mod.sendProbeResponsePacket(dot11.Address2, apSSID)
+		mod.sendProbeResponsePacket(dot11.Address2, apSSID)
+		mod.sendProbeResponsePacket(dot11.Address2, apSSID)
+
+	} else if dot11.Type == layers.Dot11TypeMgmtAuthentication {
+		mod.Info("Sending Auth response %s", dot11.Address2)
+		mod.sendAuthenticationResponse(dot11.Address2)
+		mod.sendAuthenticationResponse(dot11.Address2)
+		mod.sendAuthenticationResponse(dot11.Address2)
+	} else if dot11.Type == layers.Dot11TypeMgmtAssociationReq {
+		mod.Info("Sending Auth response %s", dot11.Address2)
+		mod.sendAssociationResponse(dot11.Address2)
+		mod.sendAssociationResponse(dot11.Address2)
+		mod.sendAssociationResponse(dot11.Address2)
+		mod.Info("Sending WPA2 M1 %s", dot11.Address2)
+		mod.sendM1Wpa2(dot11.Address2, uint16(1), uint64(1))
+		mod.sendM1Wpa2(dot11.Address2, uint16(2), uint64(2))
+		mod.sendM1Wpa2(dot11.Address2, uint16(3), uint64(3))
+	}
+
+
+}
